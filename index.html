@@ -1,0 +1,315 @@
+<!doctype html>
+<html ng-app="MyApp">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
+	<title>Subtitleizer</title>
+	<script src="angular-1.0.2.min.js"></script>
+	<style>
+	html, body { height: 100%; padding: 0; margin: 0;}
+	textarea { width: 100%; height: 50%;}
+	.render span { white-space: pre;}
+	.passed { color: blue; }
+	.current { color: red; }
+	.later { color: black; }
+	</style>
+	<script>
+		function Syllable(word, line, id, start_pos, end_pos) {
+			this.word = word
+			this.line = line
+			this.id = id
+			this.start_pos = start_pos
+			this.end_pos = end_pos
+		}
+		function detectSyllables(text) {
+			text += ' '
+			var syllables = []
+			var skip = true
+			var id = 0
+			var line = 0
+			var prev_i = 0
+			for(var i = 0; i < text.length; i++) {
+				var ch = text[i]
+				if (ch == ' ' || ch == '\n' || ch == '|') {
+					if (ch == '|') {
+						text = text.substr(0, i) + text.substr(i + 1)
+					}
+					if (!skip) {
+						var word = text.substring(prev_i, i)
+						syllables.push(new Syllable(word, line, syllables.length, prev_i, i))
+						prev_i = i
+					} else {
+						skip = true
+					}
+					if (ch == '\n') {
+						line++
+					}
+				} else {
+					skip = false
+				}
+			}
+			return syllables
+		}
+		function pad2(n) {
+			if (n < 10) {
+				return '0' + n
+			}
+			return ''+n
+		}
+		// 23456 => '00:00:23,456'
+		function formatTime(time) {
+			var h = parseInt(time / 3600000)
+			var m = parseInt(time / 60000) % 60
+			var s = parseInt(time / 1000) % 60
+			var millis = time % 1000
+			return pad2(h)+':'+pad2(m)+':'+pad2(s)+','+pad2(millis)
+		}
+		function colorize(text, color) {
+			// if (text) {
+				return '<font color="'+color+'">'+text.replace(/\n/g, '')+'</font>'
+			// }
+			// return ''
+		}
+		var app = angular.module('MyApp', [])
+		AppController.$inject = ['$scope', '$timeout']
+		function AppController(scope, $timeout) {
+			window.scope = scope //TODO lame
+			scope.times = [
+// I gave you a child, and you didn't want it
+0,304,984,1448,1616,2864,3248,3969,4160,4456,4920,
+// That's the most that I have to give
+6169,6560,6736,7136,7584,8311,8992,9144,
+// I gave you a house, and you didn't haunt it
+11704,12136,12768,13272,13448,14704,15120,15808,16000,16408,16840,
+// Now where am I supposed to live?
+18015,18767,19016,19439,20088,20264,20623,20783,
+// I gave you a tree, and you did not embrace it
+23727,24016,24583,25159,25327,26216,26535,26896,27648,27856,28191,28583,
+// I gave you a nightmare, and you didn't chase it
+29543,29887,30423,30991,31200,31607,32495,32847,33607,33783,34103,34535,
+// I'd give you a dream, and you'd only wake from it
+35479,35856,36535,36968,37128,38039,38191,38703,39111,39495,40160,40343,
+// Now I'll never go to sleep again
+41463,41791,42526,42711,43126,43903,44055,44574,44703,
+// I'd give you a treasure, and you'd only take from it
+47382,47687,48423,48847,49038,49279,49959,50143,50663,50991,51366,51975,52175,
+// Look at the hole where jewelry had been
+53375,53654,54007,54176,54550,55087,55526,56142,56502,
+// Baby, oh baby, why must you escape from it?
+59452,59885,60662,61014,61326,62102,62446,62781,63230,63454,63909,64110,
+// This love that we once called a friend
+65066,65441,66113,66354,66785,67169,67849,68490,
+// I gave you my body, and you had a-plenty
+97869,98150,98693,99085,99486,99687,100638,101013,101678,102173,102349,
+// I gave you ten lives, and you wasted twenty
+103574,103957,104477,104902,105382,105597,106581,106973,107630,107989,108414,108581,
+// Now I'm standing empty, helpless and bare
+111077,111413,112141,112501,112685,113085,114076,114701,115085,115749,
+// Without a morsel left of me to give
+116965,117181,117780,117965,118285,118781,119221,119380,120092,120284,
+// And you, you had vanished into the air
+122909,123316,124069,124292,124653,124916,126140,126621,127196,127708,
+// The air in which I must live
+128901,129117,129853,130630,131364,131596,132108
+				]
+			var text = 
+				"I gave you a child, and you did|n't want it\n"+
+				"That's the most that I have to give\n"+
+				"I gave you a house, and you did|n't haunt it\n"+
+				"Now where am I sup|posed to live?\n"+
+				"I gave you a tree, and you did not em|brace it\n"+
+				"I gave you a night|mare, and you did|n't chase it\n"+
+				"I'd give you a dream, and you'd on|ly wake from it\n"+
+				"Now I'll ne|ver go to sleep a|gain\n"+
+				"I'd give you a tre|asure, and you'd on|ly take from it\n"+
+				"Look at the hole where jew|elry had been\n"+
+				"Ba|by, oh ba|by, why must you es|cape from it?\n"+
+				"This love that we once called a friend\n"+
+				"I gave you my bo|dy, and you had a-|plenty\n"+
+				"I gave you ten liv|es, and you was|ted twe|nty\n"+
+				"Now I'm stan|ding emp|ty, help|less and bare\n"+
+				"With|out a mor|sel left of me to give\n"+
+				"And you, you had va|nished in|to the air\n"+
+				"The air in which I must live"
+			scope.syllables = detectSyllables(text)
+			scope.text = text.replace(/\|/g, '')
+			scope.normalizeTimings = function() {
+				var t0 = scope.times[0]
+				var last_line_index = lastLineIndex()
+				var s = ''
+				var arr = []
+				for (var line = 0; line <= last_line_index; line++) {
+					var first = getFirstSyllableInLine(line)
+					var last = getLastSyllableInLine(line)
+					s += '// '+scope.text.substring(first.start_pos, last.end_pos).trim()+'\n'
+					for (var i = first.id; i <= last.id; i++) {
+						if (i < scope.times.length) {
+							var t = scope.times[i] - t0
+							arr.push(t)
+							s += t
+							if (i < scope.times.length - 1) {
+								s += ','
+							}
+						}
+					}
+					s += '\n'
+				}
+				// console.log(s)
+				// console.log(arr)
+				return s
+			}
+			scope.render = function() {
+				var l = scope.times.length
+				var p = scope.syllables[l - 1]
+				if (p) {
+					scope.passed = scope.text.substr(0, p.start_pos)
+					scope.current = scope.text.substring(p.start_pos, p.end_pos)
+					scope.later = scope.text.substr(p.end_pos)
+				} else {
+					scope.passed = ''
+					scope.current = ''
+					scope.later = scope.text
+				}
+			}
+			scope.delay = 8900 // when the first word is pronounced in the song (in milliseconds)
+			function getFirstSyllableInLine(line) {
+				var i = 0
+				for (; i < scope.syllables.length; i++) {
+					var s = scope.syllables[i]
+					if (s.line == line) {
+						return s
+					}
+				}
+				throw new Error('No syllable in line: '+line)
+			}
+			function getLastSyllableInLine(line) {
+				var i = scope.syllables.length - 1
+				for (; i > 0; i--) {
+					var s = scope.syllables[i]
+					if (s.line == line) {
+						return s
+					}
+				}
+				throw new Error('No syllable in line: '+line)
+			}
+			function getLineBeforeSyllable(syllable) {
+				return scope.text.substring(getFirstSyllableInLine(syllable.line).start_pos, syllable.start_pos)
+			}
+			function getSyllable(syllable) {
+				return syllable.word
+			}
+			function getLineAfterSyllable(syllable) {
+				return scope.text.substring(syllable.end_pos, getLastSyllableInLine(syllable.line).end_pos)
+			}
+			function getPrevLine(syllable) {
+				if (syllable.line == 0) {
+					return ''
+				}
+				return scope.text.substring(
+					getFirstSyllableInLine(syllable.line - 1).start_pos,
+					getLastSyllableInLine(syllable.line - 1).end_pos
+					)
+			}
+			function lastLineIndex() {
+				return scope.syllables[scope.syllables.length - 1].line
+			}
+			function getNextLine(syllable) {
+				if (syllable.line == lastLineIndex()) {
+					return ''
+				}
+				return scope.text.substring(
+					getFirstSyllableInLine(syllable.line + 1).start_pos,
+					getLastSyllableInLine(syllable.line + 1).end_pos
+					)
+			}
+			scope.generateSubtitle = function() {
+				var l = scope.times.length
+				if (l == 0) {
+					return
+				}
+				var t0 = scope.times[0]
+				var s = ''
+				var extra_line_type = 'later'
+				var current_line_first = true
+				for(var i = 0; i < l; i++) {
+					var syllable = scope.syllables[i]
+					var time1 = scope.times[i] - t0 + scope.delay
+					if (i + 1 < l) {
+						var time2 = scope.times[i + 1] - t0 + scope.delay
+					} else {
+						var time2 = time1 + 2000
+					}
+
+					// transition
+					if (i > 0) {
+						var current_line_index = syllable.line
+						var prev_line_index = scope.syllables[i - 1].line
+						if (current_line_index != prev_line_index) {
+							if (extra_line_type == 'later') {
+								extra_line_type = 'passed'
+								current_line_first = !current_line_first
+							} else {
+								extra_line_type = 'passed'
+								current_line_first = !current_line_first
+							}
+						} else {
+							// if more than half of the line passed already, than change the other
+							// line to the next line in the lyrics
+							if (extra_line_type == 'passed') {
+								var first = getFirstSyllableInLine(syllable.line)
+								var last = getLastSyllableInLine(syllable.line)
+								if (syllable.id - first.id >= last.id - syllable.id) {
+									extra_line_type = 'later'
+								}
+							}
+						}
+					}
+
+					// generate a subtitle
+					s += (i + 1) + '\n'
+					s += formatTime(time1) + ' --> ' + formatTime(time2 - 1) + '\n'
+					var current_line =
+						colorize(getLineBeforeSyllable(syllable), 'red') +
+						colorize(getSyllable(syllable), 'yellow') +
+						colorize(getLineAfterSyllable(syllable), 'white') + '\n'
+					if (extra_line_type == 'later') {
+						var extra_line = colorize(getNextLine(syllable), 'white')+'\n' //generate next line in white
+					} else {
+						var extra_line = colorize(getPrevLine(syllable), 'red')+'\n' //generate prev line in red
+					}
+					if (current_line_first) {
+						s += current_line + extra_line + '\n'
+					} else {
+						s += extra_line + current_line + '\n'
+					}
+				}
+				scope.srt = s
+			}
+			scope.clear = function() {
+				scope.times = []
+				scope.render()
+			}
+			scope.render()
+			scope.generateSubtitle()
+		}
+		function handleKeyDown() {
+			var e = window.event
+			var t = new Date().getTime()
+			if (e.keyCode == 16) { // 16: shift
+				scope.$apply(function(){
+					scope.times.push(t)
+					scope.render()
+				})
+			}
+		}
+	</script>
+</head>
+<body ng-controller="AppController">
+	<button ng-click="clear()">Clear timings</button>
+	<button ng-click="generateSubtitle()">Generate subtitle</button> with <input ng-model="delay"> msec delay.
+	<textarea onkeydown="handleKeyDown()" ng-model="text"></textarea>
+	<div class="render"><span class="passed">{{passed}}</span><span class="current">{{current}}</span><span class="later">{{later}}</span></div>
+	<textarea ng-model="srt"></textarea>
+	<pre>{{syllables}}</pre>
+</body>
+</html>
