@@ -121,7 +121,7 @@
 				"I gave you a night|mare, and you did|n't chase it\n"+
 				"I'd give you a dream, and you'd on|ly wake from it\n"+
 				"Now I'll ne|ver go to sleep a|gain\n"+
-				"I'd give you a tre|asure, and you'd on|ly take from it\n"+
+				"I'd give you a trea|sure, and you'd on|ly take from it\n"+
 				"Look at the hole where jew|elry had been\n"+
 				"Ba|by, oh ba|by, why must you es|cape from it?\n"+
 				"This love that we once called a friend\n"+
@@ -223,14 +223,54 @@
 					)
 			}
 			scope.generateSubtitle = function() {
-				var l = scope.times.length
-				if (l == 0) {
+				if (scope.times.length == 0) {
 					return
 				}
+
+				// console.log(scope.times.length, scope.syllables.length)
+				function insert_marker_before(index) {
+					// console.log('insert_marker_before:', index)
+					var syllable = scope.syllables[index]
+					var time = scope.times[index]
+					var sp = syllable.start_pos
+					scope.text = scope.text.substr(0, sp) + '>>>' + scope.text.substr(sp)
+					scope.syllables.forEach(function(syl, i) {
+						if (i >= index) {
+							syl.start_pos += 3
+							syl.end_pos += 3
+							syl.id += 3
+						}
+					})
+					scope.times.splice(index, 0, time - 3000, time - 2000, time - 1000)
+					scope.syllables.splice(index, 0,
+						new Syllable('>', syllable.line, syllable.id, sp, sp + 1),
+						new Syllable('>', syllable.line, syllable.id + 1, sp + 1, sp + 2),
+						new Syllable('>', syllable.line, syllable.id + 2, sp + 2, sp + 3)
+						)
+				}
+				// add extra markers at the beginning of the song to indicate when
+				// need to start singing
+				if (scope.delay > 3000) {
+					insert_marker_before(0)
+					scope.delay -= 3000
+				}
+				// add extra markers after long gaps to indicate when
+				// need to start sing again
+				for (var i = 1; i < scope.times.length; i++) {
+					var time0 = scope.times[i - 1]
+					var time1 = scope.times[i]
+					if (time1 - time0 >= 5000) {
+						insert_marker_before(i)
+						i += 3
+					}
+				}
+
+				var l = scope.times.length
 				var t0 = scope.times[0]
 				var s = ''
 				var extra_line_type = 'later'
 				var current_line_first = true
+				var text_id = 1
 				for(var i = 0; i < l; i++) {
 					var syllable = scope.syllables[i]
 					var time1 = scope.times[i] - t0 + scope.delay
@@ -266,21 +306,33 @@
 					}
 
 					// generate a subtitle
-					s += (i + 1) + '\n'
-					s += formatTime(time1) + ' --> ' + formatTime(time2 - 1) + '\n'
-					var current_line =
-						colorize(getLineBeforeSyllable(syllable), 'red') +
-						colorize(getSyllable(syllable), 'yellow') +
-						colorize(getLineAfterSyllable(syllable), 'white') + '\n'
-					if (extra_line_type == 'later') {
-						var extra_line = colorize(getNextLine(syllable), 'white')+'\n' //generate next line in white
-					} else {
-						var extra_line = colorize(getPrevLine(syllable), 'red')+'\n' //generate prev line in red
+					function create_a_subtitle(time1, time2, syllable, current_color) {
+						s += text_id + '\n'
+						text_id++
+						s += formatTime(time1) + ' --> ' + formatTime(time2 - 1) + '\n'
+						var current_line =
+							colorize(getLineBeforeSyllable(syllable), 'red') +
+							colorize(getSyllable(syllable), current_color) +
+							colorize(getLineAfterSyllable(syllable), 'white') + '\n'
+						if (extra_line_type == 'later') {
+							var extra_line = colorize(getNextLine(syllable), 'white')+'\n' //generate next line in white
+						} else {
+							var extra_line = colorize(getPrevLine(syllable), 'red')+'\n' //generate prev line in red
+						}
+						if (current_line_first) {
+							s += current_line + extra_line + '\n'
+						} else {
+							s += extra_line + current_line + '\n'
+						}
 					}
-					if (current_line_first) {
-						s += current_line + extra_line + '\n'
+
+					// if the delay is too long, we need to unhighlight the last word, and show
+					// only the normal text
+					if (time2 - time1 >= 2000) {
+						create_a_subtitle(time1, time1 + 2000, syllable, 'yellow')
+						create_a_subtitle(time1 + 2000, time2, syllable, 'red')
 					} else {
-						s += extra_line + current_line + '\n'
+						create_a_subtitle(time1, time2, syllable, 'yellow')
 					}
 				}
 				scope.srt = s
